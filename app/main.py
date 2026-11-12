@@ -1,6 +1,6 @@
 import logging
 
-from app import rendezvous_client
+from app import rendezvous_connection as rdv
 from app.config_loader import Config, load_config
 
 
@@ -25,8 +25,8 @@ def setup_logging(log_file: str | None = None):
 def main():
     cfg: Config = load_config()
     setup_logging(cfg.log_file)
-    rendezvous_client.register(cfg)
-    rendezvous_client.discover(cfg.rdv_server, cfg.peer_id)
+    rdv.register(cfg)
+    rdv.discover(cfg.rdv_server, cfg.peer_id)
 
 
 if __name__ == "__main__":
