@@ -64,7 +64,7 @@ def discover(server: RDVServer, my_id: str, namespace: str | None = None):
     response = exchange_message(server, message)
 
     if response.is_ok():
-        if not response.peers:
+        if response.peers is None:
             raise RuntimeError("DISCOVER OK but no 'peers' field")
 
         peers: list[Peer] = [
