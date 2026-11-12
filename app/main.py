@@ -23,10 +23,23 @@ def setup_logging(log_file: str | None = None):
 
 
 def main():
+    from sys import argv
+
     cfg: Config = load_config()
+
+    # TODO migrar para ArgumentParser
+    if len(argv) == 3:
+        cfg.name = argv[1]
+        cfg.listen_port = int(argv[2])
+
     setup_logging(cfg.log_file)
-    rdv.register(cfg)
-    rdv.discover(cfg.rdv_server, cfg.peer_id)
+
+    while True:
+        rdv.register(cfg)
+        rdv.discover(cfg.rdv_server, cfg.peer_id)
+        if input() == "/quit":
+            rdv.unregister(cfg.rdv_server, cfg.namespace, cfg.name, cfg.listen_port)
+            return
 
 
 if __name__ == "__main__":

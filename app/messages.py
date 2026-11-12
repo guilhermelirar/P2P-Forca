@@ -48,3 +48,12 @@ class RendezvousMessage:
             type="DISCOVER",
             namespace=namespace
         )
+
+    @classmethod
+    def build_unregister(cls, namespace: str, name: str, port: int):
+        return cls(
+            type="UNREGISTER",
+            namespace=namespace,
+            name=name,
+            port=port
+        )

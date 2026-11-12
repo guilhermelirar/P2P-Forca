@@ -4,7 +4,7 @@ import socket
 
 from app.config_loader import Config, RDVServer
 from app.messages import RendezvousMessage
-from app.peer import Peer
+from app.peer_table import Peer
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +80,13 @@ def discover(server: RDVServer, my_id: str, namespace: str | None = None):
         return peers
 
     logger.error(f"[RDV] Error at DISCOVER: {response.message}")
+
+def unregister(server: RDVServer, namespace: str, name: str, port: int):
+    message = RendezvousMessage.build_unregister(namespace, name, port)
+    response = exchange_message(server, message)
+
+    if response.is_ok():
+        logger.info("[RDV] Peer unregistered")
+        return
+
+    logger.error(f"[RDV] Error when UNREGISTER: {response.message}")
