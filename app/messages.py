@@ -1,4 +1,5 @@
 import json
+import uuid
 from dataclasses import asdict, dataclass
 
 from app.config_loader import Config
@@ -44,16 +45,41 @@ class RendezvousMessage:
 
     @classmethod
     def build_discover(cls, namespace: str | None):
-        return cls(
-            type="DISCOVER",
-            namespace=namespace
-        )
+        return cls(type="DISCOVER", namespace=namespace)
 
     @classmethod
     def build_unregister(cls, namespace: str, name: str, port: int):
-        return cls(
-            type="UNREGISTER",
-            namespace=namespace,
-            name=name,
-            port=port
-        )
+        return cls(type="UNREGISTER", namespace=namespace, name=name, port=port)
+
+
+def build_hello(
+    peer_id: str,
+    version: str = "1.0",
+    features: list[str] | None = None,
+    ttl: int = 1,
+) -> dict:
+    return {
+        "type": "HELLO",
+        "msg_id": str(uuid.uuid4()),
+        "peer_id": peer_id,
+        "version": version,
+        "features": features if features is not None else ["hangman"],
+        "ttl": ttl,
+    }
+
+
+def build_hello_ok(
+    msg_id: str,
+    peer_id: str,
+    version: str = "1.0",
+    features: list[str] | None = None,
+    ttl: int = 1,
+) -> dict:
+    return {
+        "type": "HELLO_OK",
+        "msg_id": msg_id,
+        "peer_id": peer_id,
+        "version": version,
+        "features": features if features is not None else ["hangman"],
+        "ttl": ttl,
+    }
