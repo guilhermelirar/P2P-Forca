@@ -99,6 +99,8 @@ class PeerTable:
                 logger.debug(
                     f"[PEER TABLE] Peer '{remote_peer_id}' created on {conn.direction} connection"
                 )
+            if peer.conn is None:
+                peer.state = "CONNECTING"
 
             # aplicar desempate se existir conexão ativa
             if peer.conn is not None and not peer.conn.closed:
@@ -130,12 +132,6 @@ class PeerTable:
                     f"connection from '{remote_peer_id}' added to peer table"
             )
             return True
-
-    def attach_inbound(self, remote_peer_id: str, conn: PeerConnection) -> bool:
-        return self.attach_connection(remote_peer_id, conn)
-
-    def attach_outbound(self, remote_peer_id: str, conn: PeerConnection) -> bool:
-        return self.attach_connection(remote_peer_id, conn)
 
     def all_peers(self) -> list[Peer]:
         with self.lock:
