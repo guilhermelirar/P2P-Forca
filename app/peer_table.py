@@ -1,7 +1,10 @@
+import logging
 import threading
 import time
 
 from app.peer_connection import PeerConnection
+
+logger = logging.getLogger(__name__)
 
 
 class Peer:
@@ -51,6 +54,9 @@ class PeerTable:
 
                 if not existing:
                     self._table[peer.peer_id] = peer
+                    logger.debug(
+                        f"[PEER TABLE] peer {peer.peer_id} DISCOVERED and added to table"
+                    )
                     continue
 
                 if existing.addr != peer.addr and existing.conn is not None:
@@ -72,3 +78,18 @@ class PeerTable:
                 if gone.conn:
                     gone.conn.close()
                     gone.state = "GONE"
+
+    def attach_inbound(self, remote_peer_id: str, conn: PeerConnection):
+        with self.lock:
+            peer = self._table.get(remote_peer_id)
+            if peer is None:
+                logger.warning(
+                    f"[PEER TABLE] Inbound '{remote_peer_id}' not in table, ignored"
+                )
+                return
+
+            peer.conn = conn
+            peer.state = "CONNECTED"
+            logger.debug(
+                f"[PEER TABLE] Inbound connection from '{remote_peer_id}' added to peer table"
+            )
