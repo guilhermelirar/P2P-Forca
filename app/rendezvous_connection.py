@@ -37,7 +37,7 @@ def exchange_message(
         return RendezvousMessage.from_dict(response_dict)
 
 
-def register(config: Config) -> tuple[str, int] | None:
+def register(config: Config) -> tuple[str, int]:
     server = config.rdv_server
     message = RendezvousMessage.build_register(config)
     response = exchange_message(server, message)
@@ -59,7 +59,9 @@ def register(config: Config) -> tuple[str, int] | None:
     raise ValueError(f"{response.message}")
 
 
-def discover(server: RDVServer, my_id: str, namespace: str | None = None):
+def discover(
+    server: RDVServer, my_pub_ip: str, my_id: str, namespace: str | None = None
+):
     message = RendezvousMessage.build_discover(namespace)
     response = exchange_message(server, message)
 
@@ -74,12 +76,16 @@ def discover(server: RDVServer, my_id: str, namespace: str | None = None):
         ]
         peers_str_list = [str(p) for p in peers]
         peers_str = "\n\t".join(peers_str_list)
+        for p in peers:
+            if p.addr and p.addr[0] == my_pub_ip:
+                p.addr = ("127.0.0.1", p.addr[1])
 
         logger.info(f"[RDV] Discovered {len(peers)} peer(s):\n\t{peers_str}")
 
         return peers
 
     logger.error(f"[RDV] Error at DISCOVER: {response.message}")
+
 
 def unregister(server: RDVServer, namespace: str, name: str, port: int):
     message = RendezvousMessage.build_unregister(namespace, name, port)

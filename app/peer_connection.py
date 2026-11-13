@@ -4,7 +4,6 @@ import threading
 
 from app.config_loader import Config
 from app.messages import build_hello, build_hello_ok
-from app.peer_table import Peer
 
 
 class PeerConnection:
@@ -50,17 +49,19 @@ class PeerConnection:
             pass
 
 
-def connect_to_peer(peer: Peer, config: Config) -> PeerConnection | None:
+def connect_to_peer(
+    peer_id: str, peer_addr: tuple[str, int], config: Config
+) -> PeerConnection | None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5.0)
 
     try:
-        sock.connect(peer.addr)
+        sock.connect(peer_addr)
     except OSError:
         sock.close()
         return None
 
-    connection = PeerConnection(sock, "outbound", peer.peer_id)
+    connection = PeerConnection(sock, "outbound", peer_id)
     hello_msg = build_hello(config.peer_id)
 
     try:
