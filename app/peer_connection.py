@@ -3,7 +3,7 @@ import socket
 import threading
 
 from app.config_loader import Config
-from app.messages import build_hello
+from app.messages import build_hello, build_hello_ok
 from app.peer_table import Peer
 
 
@@ -81,3 +81,45 @@ def connect_to_peer(peer: Peer, config: Config) -> PeerConnection | None:
 
     connection.close()
     return None
+
+
+def start_server(
+    config: Config,
+    on_incoming_connection,
+    stop_event: threading.Event,
+) -> socket.socket:
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_sock.bind(("0.0.0.0", config.listen_port))
+    server_sock.listen()
+
+    def _accept_loop() -> None:
+        while not stop_event.is_set():
+            try:
+                client_sock, _ = server_sock.accept()
+            except OSError:
+                break
+
+            client_sock.settimeout(5.0)
+            conn = PeerConnection(client_sock, "inbound")
+            msg = conn.recv()
+
+            if (
+                msg
+                and msg.get("type") == "HELLO"
+                and "hangman" in msg.get("features", [])
+                and msg.get("peer_id")
+            ):
+                remote_peer_id = msg["peer_id"]
+                conn.peer_id = remote_peer_id
+                try:
+                    conn.send(build_hello_ok(msg["msg_id"], config.peer_id))
+                    client_sock.settimeout(None)
+                    on_incoming_connection(remote_peer_id, conn)
+                except OSError:
+                    conn.close()
+            else:
+                conn.close()
+
+    threading.Thread(target=_accept_loop, daemon=True).start()
+    return server_sock
