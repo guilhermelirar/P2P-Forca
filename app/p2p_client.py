@@ -41,16 +41,27 @@ class P2PClient:
 
     def _register_loop(self):
         logger.debug("[P2PClient] client's register loop thread started")
+        interval = self.conf.register_ttl
         while not self.quit_event.is_set():
-            time.sleep(self.conf.register_ttl/2)
-            _, self.conf.register_ttl = rdv.register(self.conf)
+            self.quit_event.wait(interval)
+            resp = rdv.register(self.conf)
+            if resp:
+                _, ttl = resp
+                interval = min(ttl * 0.75, 300)
 
     def _discover_loop(self, my_ip: str):
+        """
+        Executa o DISCOVER a cada discover_interval definido pela configuração,
+        atualiza a tabela de peers e inicia as conexões com os novos peers descobertos.
+        Aborta quando quit_event é setado.
+        """
         logger.debug("[P2PClient] client's discover loop thread started")
         while not self.quit_event.is_set():
-
             peers = rdv.discover(self.conf.rdv_server, my_ip, self.conf.peer_id)
-            if peers:
+
+            # se há peers, atualizar tabela e criar novas conexões
+            # caso contrário, lança warning
+            if peers is not None:
                 self.peer_table.upsert_from_discover(peers)
 
                 for p in self.peer_table.all_peers():
@@ -63,19 +74,24 @@ class P2PClient:
                                 target=self._read_loop, args=(conn,), daemon=True
                             ).start()
 
-            time.sleep(self.conf.discover_interval)
+            else:
+                logger.warning(
+                    f"[RDV] DISCOVER fail, attempting again in {self.conf.discover_interval} s"
+                )
 
+            # espera discover_interval ou evento de quit
+            self.quit_event.wait(self.conf.discover_interval)
 
     def start(self):
-        my_ip, self.conf.register_ttl = rdv.register(self.conf)
+        rsp = rdv.register(self.conf)
+        if not rsp:
+            logger.error("[P2PClient] could not start")
+            return
 
-        threading.Thread(
-            target=self._register_loop, daemon=True
-        ).start()
+        my_ip, self.conf.register_ttl = rsp
 
-        threading.Thread(
-            target=self._discover_loop, args=(my_ip,), daemon=True
-        ).start()
+        threading.Thread(target=self._register_loop, daemon=True).start()
+        threading.Thread(target=self._discover_loop, args=(my_ip,), daemon=True).start()
 
         logger.debug("[P2PClient] P2PClient.start() was called")
 
