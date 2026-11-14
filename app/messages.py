@@ -83,3 +83,35 @@ def build_hello_ok(
         "features": features if features is not None else ["hangman"],
         "ttl": ttl,
     }
+
+
+def build_error(src: str, dst: str, ref_id: str, code: str, message: str) -> dict:
+    return {
+        "type": "ERROR",
+        "msg_id": str(uuid.uuid4()),
+        "src": src,
+        "dst": dst,
+        "ref_msg_id": ref_id,
+        "code": code,
+        "message": message,
+        "ttl": 1,
+    }
+
+def build_bye_ok(src: str, msg_id: str, dst: str):
+    return {
+        "type": "BYE_OK",
+        "msg_id": msg_id,
+        "src": src,
+        "dst": dst,
+        "ttl": 1,
+    }
+
+def build_bye(src: str, dst: str, reason: str = "Unknown"):
+    return {
+        "type": "BYE",
+        "msg_id": str(uuid.uuid4()),
+        "src": src,
+        "dst": dst,
+        "reason": reason,
+        "ttl": 1,
+    }
