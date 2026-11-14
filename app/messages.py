@@ -1,6 +1,7 @@
 import json
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime
 
 from app.config_loader import Config
 
@@ -97,6 +98,7 @@ def build_error(src: str, dst: str, ref_id: str, code: str, message: str) -> dic
         "ttl": 1,
     }
 
+
 def build_bye_ok(src: str, msg_id: str, dst: str):
     return {
         "type": "BYE_OK",
@@ -105,6 +107,7 @@ def build_bye_ok(src: str, msg_id: str, dst: str):
         "dst": dst,
         "ttl": 1,
     }
+
 
 def build_bye(src: str, dst: str, reason: str = "Unknown"):
     return {
@@ -115,3 +118,16 @@ def build_bye(src: str, dst: str, reason: str = "Unknown"):
         "reason": reason,
         "ttl": 1,
     }
+
+
+def build_ping():
+    return {
+        "type": "PING",
+        "msg_id": str(uuid.uuid4()),
+        "timestamp": str(datetime.now().astimezone()),
+        "ttl": 1,
+    }
+
+
+def build_pong(msg_id: str, tstamp: str):
+    return {"type": "PONG", "msg_id": msg_id, "timestamp": tstamp, "ttl": 1}

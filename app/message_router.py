@@ -1,5 +1,6 @@
 import threading
 
+from app import messages
 from app.config_loader import Config
 from app.messages import build_bye_ok, build_error
 from app.peer_connection import PeerConnection
@@ -22,8 +23,20 @@ class MessageRouter:
         id = msg.get("msg_id")
 
         # TODO -> implementar ERROR unkown_type
-        if type not in ["BYE", "BYE_OK"] or ttl != 1 or id is None:
+        if type not in ["BYE", "BYE_OK", "PING", "PONG"] or ttl != 1 or id is None:
             return
+
+        # Mensagens sem dst e src
+        match type:
+            case "PING":
+                self.peer_table.touch(conn.peer_id)
+                timestamp = msg.get("timestamp")
+                if not timestamp:
+                    return
+                return conn.send(messages.build_pong(id, timestamp))
+            case "PONG":
+                return self.peer_table.record_pong_received(conn.peer_id)
+
 
         # not for me
         if msg.get("dst") != self.conf.peer_id:
@@ -43,4 +56,6 @@ class MessageRouter:
                 conn.send(
                     build_bye_ok(src=self.conf.peer_id, msg_id=id, dst=conn.peer_id)
                 )
+                self.peer_table.mark_gone(conn.peer_id)
+            case "BYE_OK":
                 self.peer_table.mark_gone(conn.peer_id)
