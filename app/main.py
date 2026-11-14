@@ -1,11 +1,7 @@
 import logging
-import threading
 
-import app.peer_connection
-from app import rendezvous_connection as rdv
 from app.config_loader import Config, load_config
 from app.p2p_client import P2PClient
-from app.peer_table import PeerTable
 
 
 def setup_logging(log_file: str | None = None):
