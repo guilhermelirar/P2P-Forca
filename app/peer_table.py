@@ -129,9 +129,18 @@ class PeerTable:
             peer.state = "CONNECTED"
             logger.debug(
                 f"[PEER TABLE] {conn.direction.capitalize()}"
-                    f"connection from '{remote_peer_id}' added to peer table"
+                f"connection from '{remote_peer_id}' added to peer table"
             )
             return True
+
+    def mark_gone(self, peer_id: str):
+        with self.lock:
+            peer = self._table.get(peer_id)
+            if not peer:
+                return
+            peer.state = "GONE"
+            if peer.conn:
+                peer.conn.close()
 
     def all_peers(self) -> list[Peer]:
         with self.lock:

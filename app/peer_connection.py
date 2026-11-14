@@ -1,10 +1,12 @@
 import json
+import logging
 import socket
 import threading
 
 from app.config_loader import Config
 from app.messages import build_hello, build_hello_ok
 
+logger = logging.getLogger(__name__)
 
 class PeerConnection:
     def __init__(
@@ -22,11 +24,12 @@ class PeerConnection:
         with self.send_lock:
             self.sock.sendall(msg_json.encode("utf-8"))
 
-    def recv(self) -> dict | None:
+    def recv_json(self) -> dict | None:
         try:
             line = self.rfile.readline()
             if not line:
                 return None
+            logger.debug(f"[Received]: {line}\n")
             return json.loads(line)
         except (OSError, json.JSONDecodeError):
             return None
@@ -66,7 +69,7 @@ def connect_to_peer(
 
     try:
         connection.send(hello_msg)
-        resp = connection.recv()
+        resp = connection.recv_json()
     except OSError:
         connection.close()
         return None
@@ -103,7 +106,7 @@ def start_server(
 
             client_sock.settimeout(5.0)
             conn = PeerConnection(client_sock, "inbound")
-            msg = conn.recv()
+            msg = conn.recv_json()
 
             if (
                 msg
