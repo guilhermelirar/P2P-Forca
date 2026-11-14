@@ -39,12 +39,16 @@ class P2PClient:
 
             self.router.handle(msg, conn)
 
-    def start(self):  # TODO mover start e register para tarefas periódicas
-        while True:
-            # REGISTER LOOP
-            my_ip, _ = rdv.register(self.conf)
+    def _register_loop(self):
+        logger.debug("[P2PClient] client's register loop thread started")
+        while not self.quit_event.is_set():
+            time.sleep(self.conf.register_ttl/2)
+            _, self.conf.register_ttl = rdv.register(self.conf)
 
-            # DISCOVER LOOPE
+    def _discover_loop(self, my_ip: str):
+        logger.debug("[P2PClient] client's discover loop thread started")
+        while not self.quit_event.is_set():
+
             peers = rdv.discover(self.conf.rdv_server, my_ip, self.conf.peer_id)
             if peers:
                 self.peer_table.upsert_from_discover(peers)
@@ -59,10 +63,21 @@ class P2PClient:
                                 target=self._read_loop, args=(conn,), daemon=True
                             ).start()
 
-            # TODO MOVER CONTROLE DE EVENTOS PARA CLI OU OUTRO LUGAR
-            if input(">>") == "/quit":
-                self.stop()
-                return
+            time.sleep(self.conf.discover_interval)
+
+
+    def start(self):
+        my_ip, self.conf.register_ttl = rdv.register(self.conf)
+
+        threading.Thread(
+            target=self._register_loop, daemon=True
+        ).start()
+
+        threading.Thread(
+            target=self._discover_loop, args=(my_ip,), daemon=True
+        ).start()
+
+        logger.debug("[P2PClient] P2PClient.start() was called")
 
     def stop(self):
         self.quit_event.set()

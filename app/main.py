@@ -36,6 +36,18 @@ def main():
     client = P2PClient(cfg)
     client.start()
 
+    while True:
+        cmd = input(">>")
+
+        if cmd == "/quit":
+            break
+        elif cmd == "/peers":
+            peers = client.peer_table.all_peers()
+            for p in peers:
+                print(p)
+
+    client.stop()
+
 
 if __name__ == "__main__":
     main()
