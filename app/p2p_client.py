@@ -4,6 +4,7 @@ import time
 
 import app.peer_connection
 import app.rendezvous_connection as rdv
+from app import messages
 from app.config_loader import Config
 from app.message_router import MessageRouter
 from app.messages import build_bye
@@ -26,7 +27,7 @@ class P2PClient:
     def handle_incoming(
         self, remote_peer_id: str, conn: app.peer_connection.PeerConnection
     ):
-        logger.info("Conexao INBOUND aceita de %s", remote_peer_id)
+        logger.debug("Conexao INBOUND aceita de %s", remote_peer_id)
         if self.peer_table.attach_connection(remote_peer_id, conn):
             threading.Thread(target=self._read_loop, args=(conn,), daemon=True).start()
 
@@ -44,6 +45,7 @@ class P2PClient:
         interval = self.conf.register_ttl
         while not self.quit_event.is_set():
             self.quit_event.wait(interval)
+            if self.quit_event.is_set(): break
             resp = rdv.register(self.conf)
             if resp:
                 _, ttl = resp
@@ -65,7 +67,7 @@ class P2PClient:
                 self.peer_table.upsert_from_discover(peers)
 
                 for p in self.peer_table.all_peers():
-                    if p.state == "DISCOVERED" and p.addr and p.conn is None:
+                    if p.state in ["DISCOVERED", "STALE"] and p.addr and p.conn is None:
                         conn = app.peer_connection.connect_to_peer(
                             p.peer_id, p.addr, self.conf
                         )
@@ -81,6 +83,33 @@ class P2PClient:
 
             # espera discover_interval ou evento de quit
             self.quit_event.wait(self.conf.discover_interval)
+            if self.quit_event.is_set(): break
+
+    def _keep_alive_loop(self) -> None:
+        """
+        Envia PING para todos os peers da rede a cada ping_interval, e
+        marca como STALE os peers que não responderam.
+        """
+        logger.debug("[P2PClient] Keep-alive loop thread started")
+        while not self.quit_event.wait(self.conf.ping_interval):
+            for p in self.peer_table.all_peers():
+                if p.state == "CONNECTED" and p.conn is not None and not p.conn.closed:
+                    if p.missed_pings >= self.conf.ping_miss_limit:
+                        logger.warning(
+                            "[KEEP-ALIVE] Peer %s after %d PINGs — marking STALE",
+                            p.peer_id,
+                            p.missed_pings,
+                        )
+                        self.peer_table.mark_stale(p.peer_id)
+                    else:
+                        p.conn.send(messages.build_ping())
+                        self.peer_table.record_ping_sent(p.peer_id)
+
+                elif p.state in "DISCOVERED" and p.is_expired:
+                    logger.debug(
+                        "[KEEP-ALIVE] Peer %s expired — marking STALE", p.peer_id
+                    )
+                    self.peer_table.mark_stale(p.peer_id)
 
     def start(self):
         rsp = rdv.register(self.conf)
@@ -92,6 +121,7 @@ class P2PClient:
 
         threading.Thread(target=self._register_loop, daemon=True).start()
         threading.Thread(target=self._discover_loop, args=(my_ip,), daemon=True).start()
+        threading.Thread(target=self._keep_alive_loop, daemon=True).start()
 
         logger.debug("[P2PClient] P2PClient.start() was called")
 

@@ -24,6 +24,11 @@ class Peer:
         self.state = "DISCOVERED"
         self.conn: PeerConnection | None = None
 
+        self.last_seen: float = time.perf_counter()
+        self.missed_pings: int = 0
+        self.last_ping_sent: float | None = None
+        self.rtt_ms: float | None = None
+
     def __repr__(self) -> str:
         addr_str = f"{self.addr[0]}:{self.addr[1]}" if self.addr else "unknown"
         return f"{self.peer_id} ({addr_str}) | {self.state}"
@@ -31,10 +36,6 @@ class Peer:
     @property
     def is_expired(self) -> bool:
         return time.perf_counter() >= self.expire_at
-
-    @property
-    def can_connect(self) -> bool:
-        return self.state == "DISCOVERED" and self.addr is not None
 
     @staticmethod
     def from_dict(d: dict) -> "Peer":
@@ -109,7 +110,7 @@ class PeerTable:
                 preferred_dir = "outbound" if keep_outbound else "inbound"
 
                 if conn.direction == preferred_dir:
-                    logger.info(
+                    logger.debug(
                         f"[PEER TABLE] Duplicate connection with {remote_peer_id}"
                         f" — keeping new {conn.direction}, closing old {peer.conn.direction}"
                     )
@@ -118,7 +119,7 @@ class PeerTable:
                     peer.state = "CONNECTED"
                     return True
                 else:
-                    logger.info(
+                    logger.debug(
                         f"[PEER TABLE] Duplicate connection with {remote_peer_id}"
                         f"— keeping existing {peer.conn.direction}, closing new {conn.direction}"
                     )
@@ -141,6 +142,36 @@ class PeerTable:
             peer.state = "GONE"
             if peer.conn:
                 peer.conn.close()
+
+    def mark_stale(self, peer_id: str):
+        with self.lock:
+            peer = self._table.get(peer_id)
+            if not peer:
+                return
+            peer.state = "STALE"
+            if peer.conn:
+                peer.conn.close()
+
+    def touch(self, peer_id: str):
+        with self.lock:
+            peer = self._table.get(peer_id)
+            if peer:
+                peer.last_seen = time.perf_counter()
+                peer.missed_pings = 0
+
+    def record_ping_sent(self, peer_id: str):
+        with self.lock:
+            peer = self._table.get(peer_id)
+            if peer:
+                peer.last_ping_sent = time.perf_counter()
+                peer.missed_pings += 1
+
+    def record_pong_received(self, peer_id: str):
+        with self.lock:
+            peer = self._table.get(peer_id)
+            if peer:
+                peer.last_seen = time.perf_counter()
+                peer.missed_pings = min(0, peer.missed_pings - 1)
 
     def all_peers(self) -> list[Peer]:
         with self.lock:
