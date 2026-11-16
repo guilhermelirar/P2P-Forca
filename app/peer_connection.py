@@ -8,30 +8,52 @@ from app.messages import build_hello, build_hello_ok
 
 logger = logging.getLogger(__name__)
 
+
 class PeerConnection:
     def __init__(
         self, sock: socket.socket, direction: str, peer_id: str | None = None
     ) -> None:
         self.sock = sock
-        self.rfile = sock.makefile("r", encoding="utf-8")
         self.direction = direction
         self.peer_id = peer_id
         self.closed = False
         self.send_lock = threading.Lock()
 
-    def send(self, msg_dict: dict) -> None:
+    def send(self, msg_dict: dict) -> bool:
+        if self.closed:
+            return False
         msg_json = json.dumps(msg_dict) + "\n"
-        with self.send_lock:
-            self.sock.sendall(msg_json.encode("utf-8"))
-
-    def recv_json(self) -> dict | None:
         try:
-            line = self.rfile.readline()
-            if not line:
-                return None
+            with self.send_lock:
+                self.sock.sendall(msg_json.encode("utf-8"))
+            return True
+        except OSError:
+            self.close()
+            return False
+
+    def recv_json(self, max_length: int = 32768) -> dict | None:
+        buffer = bytearray()
+        try:
+            while True:
+                chunk = self.sock.recv(1)
+                if not chunk:
+                    return None
+
+                buffer.extend(chunk)
+
+                if len(buffer) > max_length:
+                    logger.warning(
+                        f"Message exceeded the maximum lenght of {max_length} bytes."
+                    )
+                    return None
+
+                if chunk == b"\n":
+                    break
+
+            line = buffer.decode("utf-8")
             logger.debug(f"[Received]: {line}\n")
             return json.loads(line)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             return None
 
     def close(self) -> None:
@@ -40,10 +62,6 @@ class PeerConnection:
         self.closed = True
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        try:
-            self.rfile.close()
         except OSError:
             pass
         try:
