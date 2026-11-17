@@ -15,19 +15,52 @@ class MessageRouter:
         self.peer_table = peer_table
         self.quit_event = quit_event
 
+    def _handle_no_type(self, msg: dict, conn: PeerConnection):
+        if not conn.peer_id:
+            return
+
+        msg_type = msg.get("type")
+        # se None -> bad_request
+
+        response = {}
+
+        if msg_type is None:
+            response = messages.build_error(
+                code="bad_request",
+                src=self.conf.peer_id,
+                dst=conn.peer_id,
+                message="Request has no type",
+                ref_id=msg.get("id", "unknown"),
+            )
+
+        elif msg_type not in ["BYE", "BYE_OK", "PING", "PONG"]:
+            response = messages.build_error(
+                src=self.conf.peer_id,
+                dst=conn.peer_id,
+                code="unknown_type",
+                message=f"Type {msg_type} is unknown",
+                ref_id=msg.get("id", "unknown"),
+            )
+
+        if response:
+            conn.send(response)
+
+
     def handle(self, msg: dict, conn: PeerConnection):
         if not conn.peer_id:
             return
-        type = msg.get("type")
+        msg_type = msg.get("type")
         ttl = msg.get("ttl")
-        id = msg.get("msg_id")
+        id = msg.get("msg_id", "unknown")
 
-        # TODO -> implementar ERROR unkown_type
-        if type not in ["BYE", "BYE_OK", "PING", "PONG"] or ttl != 1 or id is None:
+        if msg_type not in ["BYE", "BYE_OK", "PING", "PONG", "ERROR"]:
+            return self._handle_no_type(msg, conn)
+
+        if ttl != 1 or id is None:
             return
 
         # Mensagens sem dst e src
-        match type:
+        match msg_type:
             case "PING":
                 self.peer_table.touch(conn.peer_id)
                 timestamp = msg.get("timestamp")
@@ -36,7 +69,6 @@ class MessageRouter:
                 return conn.send(messages.build_pong(id, timestamp))
             case "PONG":
                 return self.peer_table.record_pong_received(conn.peer_id)
-
 
         # not for me
         if msg.get("dst") != self.conf.peer_id:
@@ -51,7 +83,7 @@ class MessageRouter:
             )
             return
 
-        match type:
+        match msg_type:
             case "BYE":
                 conn.send(
                     build_bye_ok(src=self.conf.peer_id, msg_id=id, dst=conn.peer_id)
